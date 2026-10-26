@@ -1,0 +1,12 @@
+* text=auto
+*.py text eol=lf
+*.md text eol=lf
+*.html text eol=lf
+*.qss text eol=lf
+*.spec text eol=lf
+*.bat text eol=crlf
+*.png -text
+*.ico -text
+*.pdf -text
+# Preserve os avisos de terceiros exatamente como recebidos.
+third_party_licenses/* -text -diff

@@ -1,0 +1,44 @@
+# Python e ambientes locais
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Builds e pacotes: publicar binários em GitHub Releases
+/build/
+/dist/
+/work/
+/outputs/
+*.egg-info/
+*.zip
+*.7z
+*.tar.gz
+*.exe
+*.dll
+*.whl
+
+# PDFs pessoais: manter somente o exemplo do projeto
+*.pdf
+!/exemplo.pdf
+
+# Configurações privadas, logs e arquivos temporários
+.env
+.env.*
+!.env.example
+*.log
+*.tmp
+*.bak
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
