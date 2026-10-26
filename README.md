@@ -19,10 +19,20 @@ Editor desktop em português para abrir, editar e organizar PDFs. Feito em **Pyt
 
 Alvo inicial: **Windows 10/11 de 64 bits (x64)**. O pacote e as bibliotecas Windows foram testados via Wine no Linux; **o uso em Windows nativo ainda precisa ser validado**. Consulte [WINDOWS.md](WINDOWS.md) se precisar de ajuda ou quiser gerar o executável por conta própria.
 
+## Novidades da versão 0.2.0
+
+- Seleção e substituição de parágrafos com várias linhas.
+- Reaproveitamento de fontes incorporadas, incluindo CFF/Type1, com alternativa informada quando necessário.
+- Caixa de texto com quebra automática, expansão vertical e prévia do resultado no PDF.
+- Ajuste opcional de tamanho para caber e bloqueio seguro quando ainda não houver espaço.
+- Rolagem automática ao arrastar a seleção até a borda da visualização.
+
+![Edição de várias linhas com prévia](edicao-texto.png)
+
 ## O que ele faz
 
 - Abre PDFs, navega por miniaturas e ajusta o zoom.
-- Adiciona texto com tamanho e cor, substitui trechos e destaca palavras.
+- Adiciona texto com tamanho e cor, substitui trechos de várias linhas e destaca palavras.
 - Remove efetivamente conteúdo de uma área selecionada.
 - Insere páginas em branco e importa páginas de outro PDF.
 - Duplica, move, gira, exclui e extrai páginas.
@@ -56,14 +66,14 @@ Para abrir diretamente um documento: `python main.py exemplo.pdf`.
 Para executar os testes:
 
 ```bash
-QT_QPA_PLATFORM=offscreen python -m unittest -v test_editor.py
+QT_QPA_PLATFORM=offscreen python -m unittest discover -v
 ```
 
-O comando acima usa a sintaxe de shell Linux. No Windows, os testes podem ser executados com `python -m unittest -v test_editor.py`; o próprio teste configura o modo offscreen.
+O comando acima usa a sintaxe de shell Linux. No Windows, os testes podem ser executados com `python -m unittest discover -v`; o próprio teste configura o modo offscreen.
 
 ## Limitações importantes
 
-A substituição de texto é feita em trechos de uma linha, sem reorganizar os parágrafos seguintes. A fonte pode ser aproximada e o texto novo precisa caber no espaço disponível. PDFs escaneados podem receber texto e apagamentos, mas **não há OCR** para reconhecer palavras em imagens.
+A substituição aceita várias linhas de uma vez e tenta reutilizar a fonte incorporada no PDF. A janela de edição quebra linhas, cresce verticalmente e mostra uma prévia antes de aplicar. O texto é redistribuído nas linhas selecionadas; se necessário, o tamanho pode ser reduzido automaticamente. O restante da página não é empurrado para abrir espaço. Se a fonte não puder ser reutilizada, o aplicativo informa a alternativa. PDFs escaneados podem receber texto e apagamentos, mas **não há OCR** para reconhecer palavras em imagens.
 
 O histórico fica na memória durante a sessão. PDFs grandes ou complexos podem exigir mais memória e tempo. A remoção de áreas não limpa automaticamente metadados, anexos ou anotações preexistentes. Confira a cópia salva antes de usá-la como versão final.
 

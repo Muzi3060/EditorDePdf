@@ -24,9 +24,9 @@ QPushButton:disabled, QToolButton:disabled { color:#66768a; background:transpare
 QToolButton::menu-indicator { subcontrol-position:right center; right:7px; }
 QToolButton { padding-right:22px; }
 QFrame#properties { background:#101925; border:1px solid #253246; border-radius:9px; }
-QLineEdit, QSpinBox { background:#0a111c; color:#e3ecf8; padding:8px; border:1px solid #2c3d53; border-radius:6px; selection-background-color:#2563eb; }
-QSpinBox { min-height:18px; }
-QSpinBox::up-button, QSpinBox::down-button { width:18px; }
+QLineEdit, QSpinBox, QDoubleSpinBox { background:#0a111c; color:#e3ecf8; padding:8px; border:1px solid #2c3d53; border-radius:6px; selection-background-color:#2563eb; }
+QSpinBox, QDoubleSpinBox { min-height:18px; }
+QSpinBox::up-button, QSpinBox::down-button, QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width:18px; }
 QFrame#commands, QFrame#footer { background:#0c121c; }
 QFrame#commands { border-bottom:1px solid #202c3c; }
 QFrame#footer { border-top:1px solid #202c3c; }
@@ -72,3 +72,9 @@ QDialog, QMessageBox, QInputDialog, QColorDialog { background:#101925; }
 QMessageBox QLabel, QInputDialog QLabel { min-width:300px; }
 
 QScrollArea#sidebarScroll { border:0; background:#080d15; }
+
+QWidget#textDialogBody, QScrollArea#textDialogScroll { background:#101925; border:0; }
+QPlainTextEdit { background:#0a111c; color:#e0e7f1; border:1px solid #31465e; border-radius:7px; padding:10px; selection-background-color:#2463df; }
+QPlainTextEdit:focus { border-color:#76b0ff; }
+QCheckBox { color:#c0cfe2; spacing:8px; background:transparent; }
+QScrollArea#textPreview { background:#05080d; border:1px solid #26384d; border-radius:6px; }

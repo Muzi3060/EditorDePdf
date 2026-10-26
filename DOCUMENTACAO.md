@@ -35,15 +35,15 @@ Em distribuições Linux que não tragam as bibliotecas de desktop Qt, instale p
 - **Mover**: informe a posição final desejada.
 - **Extrair páginas**: salve um intervalo em outro PDF sem alterar o aberto.
 - **Busca**: Ctrl+F, digite o texto e pressione Enter; avance com Buscar próxima. O contorno azul é temporário e não é salvo.
-- **Ajuda**: aba Ajuda, menu Ajuda ou F1; funciona offline. Os arquivos `ui.py`, `style.qss`, `app.svg` e `ajuda.html` devem acompanhar `main.py`.
+- **Ajuda**: aba Ajuda, menu Ajuda ou F1; funciona offline. Os arquivos `ui.py`, `text_editing.py`, `text_dialog.py`, `style.qss`, `app.svg` e `ajuda.html` devem acompanhar `main.py`.
 
 Veja `PESQUISA.md` para as fontes consultadas, funções incluídas e avaliação de futuras melhorias. Importação não transporta marcadores do arquivo de origem e pode omitir links para páginas fora do intervalo.
 
 ## Uso
 
 - **Abrir PDF**: permite informar senha quando necessária. Navegue com Anterior/Próxima ou o número da página e ajuste o zoom.
-- **Adicionar texto**: escolha tamanho e cor na lateral e clique na página. O ponto é o início da linha de base do texto. Aceita uma linha na fonte Helvetica.
-- **Substituir texto**: arraste sobre caracteres de uma única linha horizontal. A seleção considera o centro de cada caractere; o diálogo mostra exatamente o texto selecionado. O conteúdo original é removido por redação real e o novo entra na mesma origem, com tamanho e cor inicial. Usa Helvetica regular, negrito ou itálico como aproximação. Sempre pede ciência dessa diferença. Recusa texto que não caiba na largura do trecho ou caracteres não suportados.
+- **Adicionar texto**: escolha tamanho e cor na lateral e clique na página. O ponto é o início da linha de base do texto. Aceita várias linhas, com quebra automática e prévia. Usa Helvetica ou alternativa Unicode informada.
+- **Substituir texto**: arraste sobre uma ou várias linhas horizontais; não há limite fixo de quantidade de linhas. Ao chegar à borda da visualização, a página rola durante o arraste. A caixa mostra o texto completo, quebra linhas e cresce até um limite de altura; depois usa rolagem vertical. O original é removido por redação real, e o novo texto é redistribuído nas linhas selecionadas, respeitando as posições e larguras originais para evitar outras colunas e ilustrações. Fontes incorporadas são reutilizadas em memória quando compatíveis; fontes alternativas e mudanças de estilo são informadas. O diálogo mostra uma prévia sem alterar o documento. “Reduzir tamanho para caber” pode diminuir a fonte até 6 pt (ou manter fontes originalmente menores); o usuário pode também escolher um tamanho manual. Se ainda não couber, a aplicação é bloqueada e nada é removido.
 - **Destacar texto**: arraste sobre palavras; cria anotações amarelas sobre os caracteres selecionados.
 - **Apagar área**: arraste e confirme. Usa redação real, removendo texto, pixels de imagens e desenhos que cruzem a área. Um desenho vetorial pode ser eliminado por inteiro se tocar a seleção. Não é um retângulo branco sobreposto.
 - **Girar 90° / Excluir página**: operam na página atual; o documento mantém pelo menos uma página.
@@ -52,14 +52,14 @@ Veja `PESQUISA.md` para as fontes consultadas, funções incluídas e avaliaçã
 
 ## Limitações
 
-PDF não é um documento Word. Não há refluxo de parágrafos, edição livre de fontes ou OCR. Páginas escaneadas podem receber texto e apagamentos, mas destacar/substituir exige texto extraível. A barra inferior avisa quando a página não tem texto extraível. Fontes incorporadas, ligaduras, textos verticais/inclinados e estilos mistos podem impedir uma substituição fiel; prefira trechos curtos. Texto adicionado fica alinhado às coordenadas originais da página; em página rotacionada, acompanha a orientação do conteúdo original.
+PDF não é um documento Word. Não há refluxo de parágrafos, edição livre de fontes ou OCR. Páginas escaneadas podem receber texto e apagamentos, mas destacar/substituir exige texto extraível. A barra inferior avisa quando a página não tem texto extraível. Fontes incompatíveis, caracteres indisponíveis, texto vertical/inclinado e estilos mistos podem impedir uma substituição fiel. Trechos mistos são uniformizados pelo estilo predominante, com aviso e prévia. As linhas físicas selecionadas definem o espaço de edição; não são criadas linhas fora da seleção. Texto adicionado fica alinhado às coordenadas originais da página; em página rotacionada, acompanha a orientação do conteúdo original.
 
 Redações removem o conteúdo visual selecionado e o salvamento reescreve o PDF com coleta de objetos não usados. Não é uma ferramenta de sanitização completa: metadados, anexos, campos, camadas ou anotações preexistentes podem guardar informações fora do conteúdo tratado. Não edita nem remove anotações preexistentes por seleção de área. PDFs complexos devem ser conferidos após salvar. Cópias de PDFs protegidos são salvas sem senha. O histórico guarda o conteúdo anterior em RAM enquanto a sessão existir e pode consumir bastante memória em PDFs grandes; renderização e operações são síncronas e podem pausar a janela. Histórico não persiste após fechar.
 
 ## Verificação
 
 ```bash
-QT_QPA_PLATFORM=offscreen python -m unittest -v test_editor.py
+QT_QPA_PLATFORM=offscreen python -m unittest discover -v
 ```
 
 O teste cria um PDF real com páginas em 0°, 90°, 180° e 270°, verifica conversão das posições em quatro níveis de zoom, adição, substituição com remoção do original, destaque, remoção vetorial, giro, exclusão, desfazer/refazer e salvamento/reabertura. Confere texto e coordenadas persistidos, anotações e preservação do arquivo original. `exemplo.pdf` é fornecido para inspeção manual.
@@ -78,3 +78,6 @@ O código original deste projeto é oferecido sob AGPL-3.0-or-later para compati
 
 
 Os textos completos AGPL, LGPL, GPL e licença Python acompanham esta entrega em `LICENSE.txt` e `third_party_licenses/`. Ícones da interface e do aplicativo foram criados no código do projeto, sem biblioteca de ícones externa. PyInstaller é usado apenas para empacotar; sua licença GPL com exceção do bootloader permite distribuir aplicações sob seus próprios termos: https://pyinstaller.org/en/stable/license.html .
+
+
+Para repetir o teste opcional com um PDF de regressão externo (não distribuído com o projeto), defina `EDITOR_PDF_REGRESSION_FILE` com seu caminho antes de executar os testes. Esse caso é específico do leiaute de teste local e não é um verificador genérico de PDFs.

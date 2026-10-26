@@ -2,12 +2,14 @@ import sys
 import traceback
 from pathlib import Path
 import pymupdf as fitz
-from PySide6.QtCore import Qt, QRect, Signal
-from PySide6.QtGui import QColor, QImage, QPixmap, QPainter, QPen, QShortcut, QKeySequence
+from PySide6.QtCore import Qt, QRect, Signal, QTimer
+from PySide6.QtGui import QColor, QImage, QPixmap, QPainter, QPen, QShortcut, QKeySequence, QCursor
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, QPushButton,
     QVBoxLayout, QHBoxLayout, QScrollArea, QFileDialog, QMessageBox, QInputDialog,
     QColorDialog, QSpinBox, QButtonGroup, QFrame, QTabWidget, QTextBrowser, QLineEdit)
 from model import Document, selected_chars, erase, replace
+from text_dialog import TextEditDialog
+from text_editing import apply_replacement, write_plan
 
 
 class Canvas(QLabel):
@@ -18,10 +20,14 @@ class Canvas(QLabel):
         self.start = self.end = None
         self.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         self.setCursor(Qt.CrossCursor)
+        self.drag_scroll = QTimer(self)
+        self.drag_scroll.setInterval(35)
+        self.drag_scroll.timeout.connect(self.scroll_selection)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton and self.pixmap() and not self.pixmap().isNull():
             self.start = self.end = event.position().toPoint()
+            self.drag_scroll.start()
 
     def mouseMoveEvent(self, event):
         if self.start is not None:
@@ -30,10 +36,31 @@ class Canvas(QLabel):
 
     def mouseReleaseEvent(self, event):
         if self.start is not None:
+            self.drag_scroll.stop()
             start = self.start
             self.start = self.end = None
             self.update()
             self.gesture.emit(start, event.position().toPoint())
+
+    def scroll_selection(self):
+        if self.start is None:
+            self.drag_scroll.stop()
+            return
+        owner = self.parentWidget()
+        while owner is not None and not isinstance(owner, QScrollArea):
+            owner = owner.parentWidget()
+        if owner is None:
+            return
+        cursor = owner.viewport().mapFromGlobal(QCursor.pos())
+        for position, extent, bar in ((cursor.y(), owner.viewport().height(), owner.verticalScrollBar()),
+                                      (cursor.x(), owner.viewport().width(), owner.horizontalScrollBar())):
+            delta = -18 if position < 30 else 18 if position > extent - 30 else 0
+            if delta:
+                bar.setValue(bar.value() + delta)
+        self.end = self.mapFromGlobal(QCursor.pos())
+        self.end.setX(max(0, min(self.width() - 1, self.end.x())))
+        self.end.setY(max(0, min(self.height() - 1, self.end.y())))
+        self.update()
 
     def paintEvent(self, event):
         super().paintEvent(event)
@@ -186,7 +213,7 @@ class Window(QMainWindow):
         self.tool = tool
         self.text_options.setVisible(tool == 'text')
         self.canvas.setCursor(Qt.ArrowCursor if tool == 'view' else Qt.CrossCursor)
-        self.instruction.setText({'view':'Navegue pelas páginas e ajuste o zoom para inspecionar o documento.', 'text':'Clique na página para inserir texto. O clique define o início da linha de base.', 'replace':'Arraste sobre um trecho de uma única linha. Confira o texto selecionado antes de substituir.', 'highlight':'Arraste sobre as palavras que deseja destacar em amarelo.', 'erase':'Arraste sobre uma área. Texto, imagens e desenhos serão removidos efetivamente.'}[tool])
+        self.instruction.setText({'view':'Navegue pelas páginas e ajuste o zoom para inspecionar o documento.', 'text':'Clique para adicionar texto. A caixa aceita várias linhas e mostra uma prévia antes de aplicar.', 'replace':'Arraste sobre uma ou várias linhas. Edite o trecho completo e confira a prévia antes de aplicar.', 'highlight':'Arraste sobre as palavras que deseja destacar em amarelo.', 'erase':'Arraste sobre uma área. Texto, imagens e desenhos serão removidos efetivamente.'}[tool])
 
     def choose_color(self):
         color = QColorDialog.getColor(self.color, self, 'Cor do texto')
@@ -451,14 +478,11 @@ class Window(QMainWindow):
                 return
             rect = fitz.Rect(p1, p2).normalize() & bounds
             if self.tool == 'text':
-                text, ok = QInputDialog.getText(self, 'Adicionar texto', 'Texto (uma linha, fonte Helvetica):')
-                if ok and text:
-                    font = fitz.Font('helv')
-                    if any(not font.has_glyph(ord(c)) for c in text):
-                        raise ValueError('Há caracteres indisponíveis em Helvetica. Use caracteres latinos.')
-                    if p1.x + font.text_length(text, fontsize=self.size.value()) > bounds.x1 or p1.y > bounds.y1 or p1.y - self.size.value() < bounds.y0:
-                        raise ValueError('O texto ultrapassaria a página. Reduza o tamanho ou escolha outra posição.')
-                    self.apply(lambda doc: doc[self.page].insert_text(p1, text, fontsize=self.size.value(), color=self.color.getRgbF()[:3]))
+                dialog = TextEditDialog(self, page, point=p1, size=self.size.value(), color=self.color.getRgbF()[:3])
+                if dialog.exec() == dialog.Accepted:
+                    self.apply(lambda doc: write_plan(doc[self.page], dialog.plan))
+                dialog.timer.stop()
+                dialog.deleteLater()
                 return
             if rect.is_empty or rect.width < 1 or rect.height < 1:
                 return
@@ -473,23 +497,11 @@ class Window(QMainWindow):
                 quads = [fitz.recover_char_quad(line['dir'], span, char) for line, chars in selection for char, span in chars]
                 self.apply(lambda doc: doc[self.page].add_highlight_annot(quads))
                 return
-            if len(selection) != 1 or selection[0][0]['dir'] != (1.0, 0.0):
-                raise ValueError('Selecione apenas uma linha de texto horizontal. Texto inclinado não é suportado na substituição.')
-            chars = selection[0][1]
-            old = ''.join(char['c'] for char, _ in chars)
-            text, ok = QInputDialog.getText(self, 'Substituição localizada', 'Trecho selecionado: ' + old + '\nNovo texto:', text=old)
-            if not ok or text == old:
-                return
-            span = chars[0][1]
-            fontname = 'hebo' if span['flags'] & 16 else 'heit' if span['flags'] & 2 else 'helv'
-            font = fitz.Font(fontname)
-            if any(not font.has_glyph(ord(c)) for c in text):
-                raise ValueError('O novo texto contém caracteres indisponíveis na fonte de substituição.')
-            available = max(fitz.Rect(c['bbox']).x1 for c, _ in chars) - chars[0][0]['origin'][0]
-            if font.text_length(text, fontsize=span['size']) > available + .5:
-                raise ValueError('O novo texto não cabe no trecho selecionado. Use texto mais curto ou selecione uma região maior da linha.')
-            if QMessageBox.question(self, 'Conferir aparência', 'O original será removido e o novo texto usará Helvetica, mantendo tamanho, cor e posição inicial. A fonte e estilos mistos podem diferir. Continuar?') == QMessageBox.Yes:
-                self.apply(lambda doc: replace(doc[self.page], selection, text))
+            dialog = TextEditDialog(self, page, selection=selection)
+            if dialog.exec() == dialog.Accepted:
+                self.apply(lambda doc: apply_replacement(doc[self.page], selection, dialog.plan))
+            dialog.timer.stop()
+            dialog.deleteLater()
         except Exception as exc:
             self.error(exc)
 
@@ -508,6 +520,7 @@ def main():
     from PySide6.QtGui import QIcon
     app.setWindowIcon(QIcon(str(Path(__file__).with_name('app.svg'))))
     app.setApplicationName('Editor PDF')
+    app.setApplicationVersion('0.2.0')
     from PySide6.QtCore import QTranslator, QLibraryInfo
     app.qt_translator = QTranslator(app)
     if app.qt_translator.load('qtbase_pt_BR', QLibraryInfo.path(QLibraryInfo.TranslationsPath)):
@@ -530,6 +543,15 @@ def main():
         assert not window.canvas.pixmap().isNull()
         assert window.tabs.count() == 2
         assert window.thumbnails.count() == len(window.model.doc)
+        page = window.model.doc[0]
+        selection = selected_chars(page, fitz.Rect(50, 90, 580, 180))
+        dialog = TextEditDialog(window, page, selection=selection)
+        dialog.editor.setPlainText('Teste de edição com várias linhas. Agora o editor aceita parágrafos completos.')
+        dialog.update_preview()
+        assert dialog.plan is not None
+        assert not dialog.preview.pixmap().isNull()
+        dialog.timer.stop()
+        dialog.deleteLater()
         window.thumb_timer.stop()
         window.model.doc.close()
         return

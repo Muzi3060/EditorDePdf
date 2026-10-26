@@ -79,7 +79,7 @@ class Document:
 
 def selected_chars(page, rect):
     lines = []
-    for block in page.get_text('rawdict')['blocks']:
+    for block_index, block in enumerate(page.get_text('rawdict')['blocks']):
         for line in block.get('lines', []):
             chars = []
             for span in line['spans']:
@@ -88,6 +88,7 @@ def selected_chars(page, rect):
                     if rect.contains((box.tl + box.br) / 2):
                         chars.append((char, span))
             if chars:
+                line['_block'] = block_index
                 lines.append((line, chars))
     return lines
 
@@ -98,15 +99,6 @@ def erase(page, rect):
 
 
 def replace(page, selection, text):
-    # Redact only selected glyphs; preserve nearby vectors and images.
-    line, chars = selection[0]
-    for char, _ in chars:
-        box = fitz.Rect(char['bbox'])
-        box.y0 += box.height * .15
-        box.y1 -= box.height * .15
-        page.add_redact_annot(box, fill=False, cross_out=False)
-    page.apply_redactions(images=0, graphics=0, text=0)
-    span = chars[0][1]
-    color = fitz.sRGB_to_pdf(span['color'])
-    font = 'hebo' if span['flags'] & 16 else 'heit' if span['flags'] & 2 else 'helv'
-    page.insert_text(fitz.Point(chars[0][0]['origin']), text, fontsize=span['size'], fontname=font, color=color)
+    from text_editing import prepare_replacement, apply_replacement
+    plan = prepare_replacement(page, selection, text)
+    apply_replacement(page, selection, plan)

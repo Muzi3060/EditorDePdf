@@ -21,7 +21,7 @@ Também é possível arrastar um PDF para `iniciar_windows.bat`, ou usar no term
 py -3 windows_setup.py "C:\Documentos\meu arquivo.pdf"
 ```
 
-Não exige administrador. Preserve a pasta inteira: `main.py`, `model.py`, `ui.py`, `style.qss` e `ajuda.html` trabalham juntos. Não copie um ambiente `.venv` de Linux para Windows: o iniciador cria o ambiente correto para o sistema de destino.
+Não exige administrador. Preserve a pasta inteira: `main.py`, `model.py`, `text_editing.py`, `text_dialog.py`, `ui.py`, `style.qss` e `ajuda.html` trabalham juntos. Não copie um ambiente `.venv` de Linux para Windows: o iniciador cria o ambiente correto para o sistema de destino.
 
 ## Gerar um executável sem exigir Python no computador de destino
 
