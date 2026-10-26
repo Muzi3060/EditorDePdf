@@ -2,11 +2,11 @@ import sys
 import traceback
 from pathlib import Path
 import pymupdf as fitz
-from PySide6.QtCore import Qt, QRect, Signal, QTimer
+from PySide6.QtCore import Qt, QRect, Signal, QTimer, QPoint
 from PySide6.QtGui import QColor, QImage, QPixmap, QPainter, QPen, QShortcut, QKeySequence, QCursor
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QLabel, QPushButton,
     QVBoxLayout, QHBoxLayout, QScrollArea, QFileDialog, QMessageBox, QInputDialog,
-    QColorDialog, QSpinBox, QButtonGroup, QFrame, QTabWidget, QTextBrowser, QLineEdit)
+    QColorDialog, QSpinBox, QButtonGroup, QFrame, QTabWidget, QTextBrowser, QLineEdit, QDialog)
 from model import Document, selected_chars, erase, replace
 from text_dialog import TextEditDialog
 from text_editing import apply_replacement, write_plan
@@ -479,7 +479,7 @@ class Window(QMainWindow):
             rect = fitz.Rect(p1, p2).normalize() & bounds
             if self.tool == 'text':
                 dialog = TextEditDialog(self, page, point=p1, size=self.size.value(), color=self.color.getRgbF()[:3])
-                if dialog.exec() == dialog.Accepted:
+                if dialog.exec() == QDialog.DialogCode.Accepted:
                     self.apply(lambda doc: write_plan(doc[self.page], dialog.plan))
                 dialog.timer.stop()
                 dialog.deleteLater()
@@ -498,7 +498,7 @@ class Window(QMainWindow):
                 self.apply(lambda doc: doc[self.page].add_highlight_annot(quads))
                 return
             dialog = TextEditDialog(self, page, selection=selection)
-            if dialog.exec() == dialog.Accepted:
+            if dialog.exec() == QDialog.DialogCode.Accepted:
                 self.apply(lambda doc: apply_replacement(doc[self.page], selection, dialog.plan))
             dialog.timer.stop()
             dialog.deleteLater()
@@ -520,7 +520,7 @@ def main():
     from PySide6.QtGui import QIcon
     app.setWindowIcon(QIcon(str(Path(__file__).with_name('app.svg'))))
     app.setApplicationName('Editor PDF')
-    app.setApplicationVersion('0.2.0')
+    app.setApplicationVersion('0.2.1')
     from PySide6.QtCore import QTranslator, QLibraryInfo
     app.qt_translator = QTranslator(app)
     if app.qt_translator.load('qtbase_pt_BR', QLibraryInfo.path(QLibraryInfo.TranslationsPath)):
@@ -544,14 +544,31 @@ def main():
         assert window.tabs.count() == 2
         assert window.thumbnails.count() == len(window.model.doc)
         page = window.model.doc[0]
-        selection = selected_chars(page, fitz.Rect(50, 90, 580, 180))
-        dialog = TextEditDialog(window, page, selection=selection)
-        dialog.editor.setPlainText('Teste de edição com várias linhas. Agora o editor aceita parágrafos completos.')
-        dialog.update_preview()
-        assert dialog.plan is not None
-        assert not dialog.preview.pixmap().isNull()
-        dialog.timer.stop()
-        dialog.deleteLater()
+        old_text = 'Documento de exemplo para editar localmente.'
+        new_text = 'Teste de substituição confirmado.'
+        region = page.search_for(old_text)[0]
+        errors = []
+        window.error = lambda error: errors.append(str(error))
+        def confirm_smoke_dialog():
+            dialog = app.activeModalWidget()
+            if not isinstance(dialog, TextEditDialog):
+                errors.append('A janela de edição não foi aberta.')
+                if dialog is not None:
+                    dialog.reject()
+                return
+            dialog.editor.setPlainText(new_text)
+            dialog.update_preview()
+            if dialog.plan is None or not dialog.apply_button.isEnabled():
+                errors.append(dialog.status.text())
+                dialog.reject()
+                return
+            dialog.apply_button.click()
+        window.select_tool('replace')
+        QTimer.singleShot(50, confirm_smoke_dialog)
+        window.gesture(QPoint(round(region.x0), round(region.y0)), QPoint(round(region.x1), round(region.y1)))
+        assert not errors, errors
+        assert new_text in window.model.doc[0].get_text()
+        assert old_text not in window.model.doc[0].get_text()
         window.thumb_timer.stop()
         window.model.doc.close()
         return

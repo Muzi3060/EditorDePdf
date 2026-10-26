@@ -9,7 +9,7 @@
 ## Testes de integração
 
 Comando no Linux: `QT_QPA_PLATFORM=offscreen python -m unittest discover -v`.
-Os mesmos onze testes foram executados com Python e bibliotecas Windows pelo Wine. **Resultado na versão 0.2.0: 11 testes aprovados em cada ambiente**, incluindo o caso opcional com o PDF fornecido localmente. Sem `EDITOR_PDF_REGRESSION_FILE`, esse caso é ignorado e os demais dez são executados.
+Os mesmos treze testes foram executados com Python e bibliotecas Windows pelo Wine. **Resultado na versão 0.2.1: 13 testes aprovados em cada ambiente**, incluindo os casos opcionais com o PDF fornecido localmente. Sem `EDITOR_PDF_REGRESSION_FILE`, os dois casos que usam o PDF externo são ignorados e os demais onze são executados.
 
 Cobertura:
 
@@ -23,7 +23,7 @@ Cobertura:
 
 ## Executável e interface
 
-O modo `--smoke-test` do executável Windows foi executado por Wine, sem usar o Python externo. Ele abre o exemplo incluído no pacote, monta a janela e a aba de ajuda, renderiza a página e uma miniatura e verifica os controles, além de abrir a nova caixa de edição e gerar uma prévia de várias linhas. Resultado: código de saída 0.
+O modo `--smoke-test` do executável Windows foi executado por Wine, sem usar o Python externo. Ele abre o exemplo incluído no pacote, monta a janela e a aba de ajuda, renderiza a página e uma miniatura e verifica os controles, além de abrir a caixa de edição, confirmar a alteração pelo botão real e verificar a presença do texto novo e a ausência do antigo. Resultado: código de saída 0.
 
 O mesmo teste de inicialização foi executado no código-fonte Linux. Capturas `interface.png`, `inicio.png`, `ajuda.png` e `edicao-texto.png` são da interface real Qt renderizada em modo offscreen no Linux. Foram inspecionadas visualmente, assim como uma captura em 1000×700. Não são imagens conceituais.
 
@@ -39,3 +39,12 @@ O PDF de integração é criado em pasta temporária. `exemplo.pdf` é um arquiv
 - Estudo com usuários, leitor de tela e avaliação formal de acessibilidade ou preferência estética.
 
 Qt 6 fornece suporte a telas de alta densidade, mas escalas de 125%, 150% e múltiplos monitores em Windows nativo ainda não foram exercitadas. As verificações offscreen não confirmam os plugins gráficos de cada computador de destino.
+
+
+## Regressão da confirmação — 0.2.1
+
+A comparação do retorno do diálogo passou a usar `QDialog.DialogCode.Accepted`, compatível com a configuração de enums do PySide6. A falha anterior estava na confirmação, depois da prévia; os testes antigos não percorriam essa etapa.
+
+Os novos testes abrem o diálogo modal real pela ação de seleção da janela, preenchem o campo e clicam nos botões usando QtTest, sem substituir/mockar `exec()`. Cobrem Aplicar, Cancelar, adicionar texto, desfazer/refazer e salvar/reabrir.
+
+O título da página 3 do PDF fornecido foi substituído por “Como usar o guia”. Após salvar e reabrir, foi verificada a ausência do título antigo na extração e na busca, a ocorrência única do novo, a preservação do texto vizinho e a ausência de marcações de redação pendentes ou retângulos adicionados. Depois, somente na cópia em memória do teste, o fluxo de conteúdo do texto novo foi esvaziado: nem o texto antigo nem o novo reapareceram. Isso verifica remoção real em vez de simples sobreposição. O arquivo fornecido permaneceu intacto.

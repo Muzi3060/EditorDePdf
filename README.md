@@ -19,6 +19,10 @@ Editor desktop em português para abrir, editar e organizar PDFs. Feito em **Pyt
 
 Alvo inicial: **Windows 10/11 de 64 bits (x64)**. O pacote e as bibliotecas Windows foram testados via Wine no Linux; **o uso em Windows nativo ainda precisa ser validado**. Consulte [WINDOWS.md](WINDOWS.md) se precisar de ajuda ou quiser gerar o executável por conta própria.
 
+## Correções da versão 0.2.1
+
+Corrigida a confirmação das janelas de adicionar e substituir texto, que podia exibir `TextEditDialog object has no attribute Accepted`. Os testes agora percorrem a janela real, clicam em Aplicar/Cancelar e verificam o PDF salvo. A substituição remove o texto antigo do conteúdo da página; não adiciona apenas um texto por cima.
+
 ## Novidades da versão 0.2.0
 
 - Seleção e substituição de parágrafos com várias linhas.

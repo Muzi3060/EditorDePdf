@@ -7,8 +7,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 import pymupdf as fitz
-from PySide6.QtCore import Qt, QPoint
+from PySide6.QtCore import Qt, QPoint, QTimer
 from PySide6.QtWidgets import QApplication
+from PySide6.QtTest import QTest
 from model import Document, selected_chars
 from text_editing import (selection_text, prepare_replacement, apply_replacement,
     prepare_addition, write_plan, dominant_span)
@@ -30,7 +31,72 @@ def example(rotation=0):
     return doc
 
 
+def run_modal_gesture(test, window, start, end, text=None, cancel=False):
+    """Use the real modal event loop and click its button; never mock exec()."""
+    records = []
+    errors = []
+    window.error = lambda error: errors.append(str(error))
+    def interact():
+        dialog = QApplication.activeModalWidget()
+        if not isinstance(dialog, TextEditDialog):
+            records.append('wrong dialog')
+            if dialog is not None:
+                dialog.reject()
+            return
+        if cancel:
+            QTest.mouseClick(dialog.cancel_button, Qt.LeftButton)
+            records.append('cancelled')
+            return
+        dialog.editor.setPlainText(text)
+        dialog.update_preview()
+        records.append('ready' if dialog.apply_button.isEnabled() else dialog.status.text())
+        if dialog.apply_button.isEnabled():
+            QTest.mouseClick(dialog.apply_button, Qt.LeftButton)
+        else:
+            dialog.reject()
+    QTimer.singleShot(25, interact)
+    window.gesture(start, end)
+    test.assertFalse(errors, errors)
+    test.assertEqual(records, ['cancelled'] if cancel else ['ready'])
+
+
 class TextEditing(unittest.TestCase):
+    def test_confirm_and_cancel_through_real_window(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            original = Path(tmp) / 'original.pdf'
+            with example() as doc:
+                doc.save(original)
+            w = Window()
+            w.model.open(original)
+            w.refresh()
+            w.show()
+            app.processEvents()
+            w.select_tool('replace')
+            start, end = QPoint(39, 40), QPoint(230, 105)
+            before = w.model.history[w.model.index]
+            run_modal_gesture(self, w, start, end, cancel=True)
+            self.assertEqual(w.model.history[w.model.index], before)
+            run_modal_gesture(self, w, start, end, 'Texto substituído pela confirmação real da janela.')
+            self.assertNotIn('ORIGINAL_', w.model.doc[0].get_text())
+            self.assertIn('Texto substituído', w.model.doc[0].get_text())
+            self.assertTrue(w.model.dirty)
+            w.travel(-1)
+            self.assertIn('ORIGINAL_', w.model.doc[0].get_text())
+            w.travel(1)
+            self.assertNotIn('ORIGINAL_', w.model.doc[0].get_text())
+            w.select_tool('text')
+            run_modal_gesture(self, w, QPoint(40, 200), QPoint(40, 200), 'Texto adicionado pela janela.')
+            self.assertIn('Texto adicionado', w.model.doc[0].get_text())
+            output = Path(tmp) / 'editado.pdf'
+            w.model.save(output)
+            with fitz.open(output) as reopened:
+                self.assertNotIn('ORIGINAL_', reopened[0].get_text())
+                self.assertIn('Texto substituído', reopened[0].get_text())
+                self.assertIn('Texto adicionado', reopened[0].get_text())
+            w.thumb_timer.stop()
+            w.hide()
+            w.model.doc.close()
+
     def test_multiline_preserves_embedded_font_and_rotation(self):
         for rotation in (0, 90, 180, 270):
             with self.subTest(rotation=rotation), example(rotation) as doc:
@@ -178,6 +244,49 @@ class TextEditing(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get('EDITOR_PDF_REGRESSION_FILE'), 'PDF externo opcional não informado')
 class RealPDFRegression(unittest.TestCase):
+    def test_real_heading_confirm_removes_underlying_original(self):
+        source = Path(os.environ['EDITOR_PDF_REGRESSION_FILE'])
+        original_bytes = source.read_bytes()
+        w = Window()
+        w.model.open(source)
+        w.page = 2
+        w.refresh()
+        w.show()
+        app.processEvents()
+        w.select_tool('replace')
+        page = w.model.doc[2]
+        old = 'How to Use This Guide'
+        region = page.search_for(old)[0]
+        neighbour = page.get_text(clip=fitz.Rect(79, 115, 296, 183))
+        drawing_count = len(page.get_drawings())
+        run_modal_gesture(self, w, QPoint(round(region.x0), round(region.y0)),
+                          QPoint(round(region.x1), round(region.y1)), 'Como usar o guia')
+        self.assertNotIn(old, w.model.doc[2].get_text())
+        self.assertIn('Como usar o guia', w.model.doc[2].get_text())
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / 'titulo-editado.pdf'
+            w.model.save(output)
+            with fitz.open(output) as reopened:
+                page = reopened[2]
+                self.assertFalse(page.search_for(old))
+                self.assertEqual(len(page.search_for('Como usar o guia')), 1)
+                self.assertEqual(neighbour, page.get_text(clip=fitz.Rect(79, 115, 296, 183)))
+                self.assertEqual(drawing_count, len(page.get_drawings()))
+                self.assertFalse(any(a.type[0] == fitz.PDF_ANNOT_REDACT for a in page.annots() or []))
+                # Remove the new ink in this in-memory verification copy. If the
+                # original had only been covered, its text would reappear here.
+                contents = page.get_contents()
+                self.assertGreaterEqual(len(contents), 2)
+                reopened.update_stream(contents[-1], b'')
+                page = reopened.reload_page(page)
+                self.assertNotIn(old, page.get_text())
+                self.assertNotIn('Como usar o guia', page.get_text())
+                self.assertEqual(neighbour, page.get_text(clip=fitz.Rect(79, 115, 296, 183)))
+        self.assertEqual(original_bytes, source.read_bytes())
+        w.thumb_timer.stop()
+        w.hide()
+        w.model.doc.close()
+
     def test_real_document_fonts_save_and_reopen(self):
         # Fixture supplied locally by the user; never added to Git or Releases.
         source = Path(os.environ['EDITOR_PDF_REGRESSION_FILE'])
